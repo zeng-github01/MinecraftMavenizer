@@ -353,16 +353,29 @@ public final class ProcessUtils {
             throw new RuntimeException("Javac failed to execute! Exit code " + process.exitCode + " Source Jar: " + sourcesJar.getAbsolutePath());
         }
 
+        File ret = null;
         try {
-            var ret = FileUtils.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
-            if (!Util.attemptCleanupDirectory(sourcesOutput))
-                LOGGER.debug("Failed to cleanup source directory, Will attempt to cleanup when JVM exits");
-            if (!Util.attemptCleanupDirectory(outputClasses))
-                LOGGER.debug("Failed to cleanup classes directory, Will attempt to cleanup when JVM exits");
-            return ret;
-        } finally {
-            FileUtils.deleteOnExit(sourcesOutput);
-            FileUtils.deleteOnExit(outputClasses);
+            ret = FileUtils.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
+        } catch (Throwable e) { // If we fail to make the jar, propagate that exception
+            return Util.sneak(e);
+        }
+
+        // If we fail to cleanup, oh well they can clean it themselves
+        cleanup("sources", sourcesOutput);
+        cleanup("classes", outputClasses);
+        return ret;
+    }
+
+    private static void cleanup(String name, File dir) {
+        try {
+            if (!Util.attemptCleanupDirectory(dir)) {
+                LOGGER.debug("Failed to cleanup " + name + "  directory, Will attempt to cleanup when JVM exits");
+                FileUtils.deleteOnExit(dir);
+            }
+        } catch (Throwable e) {
+            LOGGER.warn("Failed to cleanup " + name + " directory with error: " + e.getMessage());
+            LOGGER.warn("It is safe to delete temporary file: " + dir.getAbsolutePath());
+            LOGGER.debug(e);
         }
     }
 

@@ -65,7 +65,7 @@ The only task consumers should care about is the `--maven` task, and thus is the
 | --repository `String` |                            |**EXPERIMENTAL**: URL of a foreign maven repository to use for dependencies. The format is `name,url`. The name must not include any commas.
 
 Supported Artifacts:
-  - `net.minecraftfroge:forge`
+  - `net.minecraftforge:forge`
   - `net.minecraft:client`
   - `net.minecraft:client-extra`
   - `net.minecraft:server`

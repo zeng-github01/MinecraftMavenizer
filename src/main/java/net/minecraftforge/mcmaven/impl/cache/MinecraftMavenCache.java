@@ -66,7 +66,7 @@ public final class MinecraftMavenCache extends MavenCache {
             FileUtils.ensureParent(target);
             // TODO: [MCMavenizer] Check hashes for local minecraft archive
             try {
-                LOGGER.debug("Copying " + local);
+                LOGGER.debug("Copying " + local.getAbsolutePath());
                 Files.copy(local.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 Util.sneak(e);

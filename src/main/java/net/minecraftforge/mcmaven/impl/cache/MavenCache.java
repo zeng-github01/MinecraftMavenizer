@@ -284,7 +284,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
      */
     protected void downloadFile(File target, String path) throws IOException {
         // TODO Currently there is no handling if the download fails. For now, I'm throwing the exception.
-        LOGGER.debug("Downloading " + path);
+        LOGGER.debug("Downloading " + this.repo + path);
         DownloadUtils.downloadFile(target, this.repo + path);
     }
 

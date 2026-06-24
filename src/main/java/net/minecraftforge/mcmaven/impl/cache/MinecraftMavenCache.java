@@ -17,6 +17,8 @@ import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.os.OS;
 
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
+
 /** Represents the Minecraft maven cache for this tool. */
 public final class MinecraftMavenCache extends MavenCache {
     private static final HashFunction[] KNOWN_HASHES = {
@@ -64,6 +66,7 @@ public final class MinecraftMavenCache extends MavenCache {
             FileUtils.ensureParent(target);
             // TODO: [MCMavenizer] Check hashes for local minecraft archive
             try {
+                LOGGER.debug("Copying " + local);
                 Files.copy(local.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 Util.sneak(e);

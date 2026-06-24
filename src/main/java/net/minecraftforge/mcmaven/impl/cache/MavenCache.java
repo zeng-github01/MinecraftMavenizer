@@ -11,7 +11,6 @@ import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.hash.HashUtils;
-import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import org.jetbrains.annotations.ApiStatus;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
@@ -28,6 +27,8 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 // TODO: [MCMavenizer][MavenCache] Handle download failures properly
 /** Represents the maven cache for this tool. */
@@ -185,8 +186,10 @@ public sealed class MavenCache permits MinecraftMavenCache {
             try {
                 var uri = new URI(this.repo + path);
                 var file = new File(uri.getPath());
-                if (file.exists())
+                if (file.exists()) {
+                    LOGGER.debug("Using Local " + file.getAbsolutePath());
                     return file;
+                }
             } catch (URISyntaxException e) {
                 throw new IOException(e);
             }
@@ -236,6 +239,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
                 for (var func : knownHashes) {
                     if (Mavenizer.isOffline()) continue;
 
+                    LOGGER.debug("Downloading " + repo + path + '.' + func.extension());
                     var rhash = DownloadUtils.tryDownloadString(repo + path + '.' + func.extension());
                     if (rhash == null)
                         continue;
@@ -280,6 +284,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
      */
     protected void downloadFile(File target, String path) throws IOException {
         // TODO Currently there is no handling if the download fails. For now, I'm throwing the exception.
+        LOGGER.debug("Downloading " + path);
         DownloadUtils.downloadFile(target, this.repo + path);
     }
 

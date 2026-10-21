@@ -89,7 +89,7 @@ public final class ForgeRepo extends Repo {
     public static boolean isSupported(String version) {
         var fg = FGVersion.fromForge(version);
         if (fg == null)
-            return false;
+            return isPython(version);
 
         // Early versions of 1.8.8 use a old '2.0' build with funkey fernflower
         // The mcp artifact was also updated behind the scenes, so it won't apply correctly
@@ -114,14 +114,19 @@ public final class ForgeRepo extends Repo {
             throw new IllegalArgumentException("Unknown or unsupported module: " + module);
 
         var fg = FGVersion.fromForge(version);
-        LOGGER.info("Processing Minecraft Forge (userdev): " + version);
+        LOGGER.info("Processing Minecraft Forge: " + version);
         var indent = LOGGER.push();
         try {
             // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             if (fg == null) {
                 if (isPython(version)) {
-                    //Info.gatherVariants(this.cache.maven(), version, fg);
-                    throw new IllegalArgumentException("Python version unsupported!");
+                    var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
+                    var sourceZip = this.cache.maven().download(source);
+                    var prepared = PythonForgeSource.prepare(
+                        new File(this.cache.root(), "forge/python/" + version + "/userdev.jar"),
+                        sourceZip
+                    );
+                    return processV2(version, mappings, outputJson, FGVersion.v1, prepared);
                 }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
             }
@@ -171,13 +176,19 @@ public final class ForgeRepo extends Repo {
     /// - `net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip`
     ///   - A zip file containing fields, methods, and params.csv files mapping SRG->MCP names.
     private List<PendingArtifact> processV2(String version, Mappings baseMappings, Map<String, Supplier<String>> outputJson, FGVersion fgVersion) {
+        return processV2(version, baseMappings, outputJson, fgVersion, null);
+    }
+
+    private List<PendingArtifact> processV2(String version, Mappings baseMappings, Map<String, Supplier<String>> outputJson, FGVersion fgVersion, @Nullable PythonForgeSource.Prepared pythonSource) {
         var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
         var userdev = getUserdev(version);
 
         var build = new File(this.cache.root(), "forge/" + userdev.getFolder());
         var jdks = this.cache.jdks();
 
-        var dev = new FG2Userdev(build, this, userdev, fgVersion);
+        var dev = pythonSource == null
+            ? new FG2Userdev(build, this, userdev, fgVersion)
+            : new FG2Userdev(build, this, userdev, fgVersion, pythonSource.userdev(), pythonSource.mcpArchive());
         var mcVersion = Util.forgeToMcVersion(version);
         var srgTask = dev.getMCP().getMappings();
         var srgSources = dev.getSources();

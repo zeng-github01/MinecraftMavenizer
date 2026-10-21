@@ -36,6 +36,7 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.JDKCache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
+import net.minecraftforge.mcmaven.impl.mappings.LegacyPackageMappings;
 import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
 import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
@@ -61,6 +62,10 @@ public class MCPLegacy {
     private final MCPConfigRepo repo;
     private final Artifact name;
     private final boolean isPython;
+    private final @Nullable byte[] packageMappings;
+    private final @Nullable String packageMappingsHash;
+    private final @Nullable byte[] fernflowerPatch;
+    private final @Nullable String fernflowerPatchHash;
     private final String mcVersion;
     private final ComparableVersion mcVersionComp;
     private final File data;
@@ -78,9 +83,15 @@ public class MCPLegacy {
 
     private Child child;
 
-    public MCPLegacy(MCPConfigRepo repo, Artifact name, @Nullable String python) {
+    public MCPLegacy(MCPConfigRepo repo, Artifact name, @Nullable String python, @Nullable byte[] packageMappings, @Nullable byte[] fernflowerPatch) {
         this.repo = repo;
         this.isPython = python != null;
+        this.packageMappings = packageMappings;
+        this.packageMappingsHash = packageMappings == null ? null : HashFunction.sha1().hash(packageMappings);
+        this.fernflowerPatch = fernflowerPatch;
+        this.fernflowerPatchHash = fernflowerPatch == null ? null : HashFunction.sha1().hash(fernflowerPatch);
+        if (fernflowerPatch != null && packageMappings == null)
+            throw new IllegalArgumentException("Python-era Fernflower patches require package mappings");
         this.mcVersion = name.getVersion();
         this.mcVersionComp = new ComparableVersion(this.mcVersion);
 
@@ -218,6 +229,8 @@ public class MCPLegacy {
         var target = new File(this.build, name);
         var cache = Util.cache(target)
             .addKnown("data", dataHash);
+        if (this.isPython && this.packageMappingsHash != null && isPackageMappedData(name))
+            cache.addKnown("packages", this.packageMappingsHash);
 
         if (Mavenizer.checkCache(target, cache))
             return target;
@@ -227,19 +240,43 @@ public class MCPLegacy {
         try (var zip = new ZipFile(data)) {
             var entry = zip.getEntry(name);
             if (entry == null)
-                throw except("Missing Data: " + name);
+                if (this.isPython && "conf/joined.srg".equals(name)) {
+                    var client = zip.getEntry("conf/client.srg");
+                    var server = zip.getEntry("conf/server.srg");
+                    if (client == null || server == null)
+                        throw except("Missing Data: " + name + " and client/server SRG mappings");
 
-            try (var os = new FileOutputStream(target)) {
-                zip.getInputStream(entry).transferTo(os);
+                    try (var clientMappings = zip.getInputStream(client);
+                         var serverMappings = zip.getInputStream(server)) {
+                        IMappingFile.load(clientMappings)
+                            .merge(IMappingFile.load(serverMappings))
+                            .write(target.toPath(), IMappingFile.Format.SRG, false);
+                    }
+                } else {
+                    throw except("Missing Data: " + name);
+                }
+
+            if (entry != null) {
+                try (var input = zip.getInputStream(entry);
+                     var os = new FileOutputStream(target)) {
+                    input.transferTo(os);
+                }
             }
 
-            target.setLastModified(entry.getLastModifiedTime().toMillis());
+            if (this.isPython && this.packageMappings != null && isPackageMappedData(name))
+                Files.write(target.toPath(), LegacyPackageMappings.repackage(Files.readAllBytes(target.toPath()), this.packageMappings));
+
+            target.setLastModified(entry == null ? data.lastModified() : entry.getLastModifiedTime().toMillis());
 
             cache.save();
             return target;
         } catch (IOException e) {
             throw except("Failed to extract `" + name + '`', e);
         }
+    }
+
+    private static boolean isPackageMappedData(String name) {
+        return "conf/joined.srg".equals(name) || "conf/joined.exc".equals(name);
     }
 
     private RuntimeException except(String message) {
@@ -621,9 +658,35 @@ public class MCPLegacy {
 
         private Task cleanup() {
             var input = this.decompile();
+            if (MCPLegacy.this.fernflowerPatch != null) {
+                var decompiled = input;
+                input = Task.named(prefix + "fernflower-fixes",
+                    Task.deps(decompiled), () -> applyFernflowerPatches(decompiled.execute())
+                );
+            }
+            var cleanedInput = input;
             return Task.named(prefix + "cleanup",
-                Task.deps(input), () -> cleanup(input.execute())
+                Task.deps(cleanedInput), () -> cleanup(cleanedInput.execute())
             );
+        }
+
+        private File applyFernflowerPatches(File input) {
+            var output = new File(this.build, "fernflower-fixed.jar");
+            var cache = Util.cache(output)
+                .add("input", input)
+                .addKnown("patch", MCPLegacy.this.fernflowerPatchHash)
+                .addKnown("packages", MCPLegacy.this.packageMappingsHash);
+
+            if (Mavenizer.checkCache(output, cache))
+                return output;
+
+            try {
+                LegacyFernflowerPatches.apply(input, output, MCPLegacy.this.fernflowerPatch, MCPLegacy.this.packageMappings);
+                cache.save();
+                return output;
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to apply Python-era Fernflower patches", e);
+            }
         }
 
         private File cleanup(File input) {

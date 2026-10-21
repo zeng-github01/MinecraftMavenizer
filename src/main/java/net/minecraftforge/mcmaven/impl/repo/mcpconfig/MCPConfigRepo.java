@@ -74,7 +74,7 @@ import java.util.jar.JarFile;
 // TODO [MCMavenizer][Documentation] Document
 public final class MCPConfigRepo extends Repo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
-    private record LegacyKey(Artifact artifact, @Nullable String python) {}
+    private record LegacyKey(Artifact artifact, @Nullable String python, @Nullable String packageHash, @Nullable String patchHash) {}
     private final Map<LegacyKey, MCPLegacy> legacy = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
     private final Task downloadLauncherManifest = Task.named("downloadLauncherManifest", this::downloadLauncherManifest);
@@ -99,18 +99,24 @@ public final class MCPConfigRepo extends Repo {
     }
 
     public MCPLegacy legacy(String mcVersion) {
-        return legacy(mcVersion, null);
+        return legacy(mcVersion, null, null);
     }
 
     // Variants used for Forge artifacts
     public MCPLegacy legacy(String mcVersion, @Nullable String python) {
-        var artifact = MCPLegacy.artifact(mcVersion);
-        var key = new LegacyKey(artifact, python);
-        return this.legacy.computeIfAbsent(key, this::downloadLegacy);
+        return legacy(mcVersion, python, null);
     }
 
-    private MCPLegacy downloadLegacy(LegacyKey key) {
-        return new MCPLegacy(this, key.artifact(), key.python());
+    public MCPLegacy legacy(String mcVersion, @Nullable String python, @Nullable byte[] packageMappings) {
+        return legacy(mcVersion, python, packageMappings, null);
+    }
+
+    public MCPLegacy legacy(String mcVersion, @Nullable String python, @Nullable byte[] packageMappings, @Nullable byte[] fernflowerPatch) {
+        var artifact = MCPLegacy.artifact(mcVersion);
+        var packageHash = packageMappings == null ? null : net.minecraftforge.util.hash.HashFunction.sha1().hash(packageMappings);
+        var patchHash = fernflowerPatch == null ? null : net.minecraftforge.util.hash.HashFunction.sha1().hash(fernflowerPatch);
+        var key = new LegacyKey(artifact, python, packageHash, patchHash);
+        return this.legacy.computeIfAbsent(key, _ -> new MCPLegacy(this, artifact, python, packageMappings, fernflowerPatch));
     }
 
     public MinecraftTasks getMCTasks(String version) {

@@ -13,6 +13,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -21,9 +23,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -32,6 +36,9 @@ import org.jetbrains.annotations.Nullable;
 
 import com.google.gson.reflect.TypeToken;
 
+import de.siegmar.fastcsv.reader.CsvReader;
+import de.siegmar.fastcsv.writer.CsvWriter;
+import de.siegmar.fastcsv.writer.LineDelimiter;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.JDKCache;
@@ -98,13 +105,7 @@ public class MCPLegacy {
         if (python != null) {
             this.name = name.withVersion(name.getVersion() + '-' + python.replace(".zip", "")).withClassifier(null);
             this.data = new File(this.repo.getCache().root(), "mcp/legacy/" + python);
-            if (!this.data.exists()) {
-                if (!DownloadUtils.tryDownloadFile(this.data, Constants.MCP_DOWNLOADS + python)) {
-                    if (this.data.exists())
-                        this.data.delete();
-                    throw new IllegalStateException("Failed to download legacy MCP " + Constants.MCP_DOWNLOADS + python);
-                }
-            }
+            ensurePythonMcpArchive(this.data, python);
         } else {
             this.name = name;
             var fixed = StupidHacks.fixMCPArtifact(name);
@@ -129,6 +130,69 @@ public class MCPLegacy {
         else
             this.statics = extract(this.isPython ? "conf/STATIC_METHODS.txt" : "static_methods.txt"); // may not exist
         this.listLibraries = listLibraries();
+    }
+
+    private static void ensurePythonMcpArchive(File archive, String name) {
+        if (archive.isFile()) {
+            try {
+                validatePythonMcpArchive(archive);
+                return;
+            } catch (ZipException e) {
+                Mavenizer.LOGGER.warn("Cached legacy MCP archive is invalid; downloading a fresh copy: " + archive, e);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to validate legacy MCP archive " + archive, e);
+            }
+        }
+
+        var url = Constants.MCP_DOWNLOADS + name;
+        FileUtils.ensureParent(archive);
+        java.nio.file.Path temporary;
+        try {
+            temporary = Files.createTempFile(archive.toPath().getParent(), archive.getName(), ".download");
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create temporary file for legacy MCP download " + url, e);
+        }
+
+        try {
+            Files.delete(temporary);
+            if (!DownloadUtils.tryDownloadFile(temporary.toFile(), url))
+                throw new IllegalStateException("Failed to download legacy MCP " + url);
+
+            validatePythonMcpArchive(temporary.toFile());
+            Files.move(temporary, archive.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to download or validate legacy MCP " + url, e);
+        } finally {
+            try {
+                Files.deleteIfExists(temporary);
+            } catch (IOException e) {
+                Mavenizer.LOGGER.warn("Failed to remove temporary legacy MCP download " + temporary, e);
+            }
+        }
+    }
+
+    static void validatePythonMcpArchive(File archive) throws IOException {
+        try (var zip = new ZipFile(archive)) {
+            var hasJoinedMappings = zip.getEntry("conf/joined.srg") != null;
+            var hasSplitMappings = zip.getEntry("conf/client.srg") != null && zip.getEntry("conf/server.srg") != null;
+            if (!hasJoinedMappings && !hasSplitMappings)
+                throw new ZipException("Legacy MCP archive is missing joined.srg or client/server SRG mappings");
+
+            for (var name : List.of("conf/fields.csv", "conf/methods.csv", "conf/params.csv")) {
+                if (zip.getEntry(name) == null)
+                    throw new ZipException("Legacy MCP archive is missing " + name);
+            }
+
+            var buffer = new byte[8192];
+            for (var entries = zip.entries(); entries.hasMoreElements();) {
+                var entry = entries.nextElement();
+                if (entry.isDirectory())
+                    continue;
+                try (var input = zip.getInputStream(entry)) {
+                    while (input.read(buffer) != -1) {}
+                }
+            }
+        }
     }
 
     public Artifact getName() {
@@ -157,6 +221,124 @@ public class MCPLegacy {
 
     public Task getMappings() {
         return this.mappings;
+    }
+
+    public Task getPythonMappingCsv() {
+        if (!this.isPython)
+            throw new IllegalStateException("MCP CSV mappings are only available for Python-era MCP archives");
+        return Task.named(prefix() + "mapping-csv", this::createPythonMappingCsv);
+    }
+
+    private File createPythonMappingCsv() {
+        var output = new File(this.build, "data/mapings/mcp-" + this.name.getVersion() + ".zip");
+        var cache = Util.cache(output)
+            .add("mcp", this.data)
+            .addKnown("format", "python-mcp-csv-v2");
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        FileUtils.ensureParent(output);
+        try {
+            writePythonMappingCsv(this.data, output);
+            cache.save();
+            return output;
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to synthesize mapping CSV archive from " + this.data.getAbsolutePath(), e);
+        }
+    }
+
+    static void writePythonMappingCsv(File data, File output) throws IOException {
+        try (var source = new ZipFile(data);
+             var target = new ZipOutputStream(new FileOutputStream(output))) {
+            for (var name : List.of("fields.csv", "methods.csv", "params.csv")) {
+                var entry = source.getEntry("conf/" + name);
+                if (entry == null)
+                    throw new IOException("Python-era MCP archive is missing conf/" + name);
+
+                target.putNextEntry(FileUtils.getStableEntry(name));
+                try (var input = source.getInputStream(entry)) {
+                    mergePythonMappingCsv(name, input, target);
+                }
+                target.closeEntry();
+            }
+        }
+    }
+
+    private static void mergePythonMappingCsv(String filename, java.io.InputStream input, OutputStream output) throws IOException {
+        var keyColumn = "params.csv".equals(filename) ? "param" : "searge";
+        var entries = new LinkedHashMap<String, PythonMappingEntry>();
+        try (var reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+            var rows = reader.iterator();
+            if (!rows.hasNext())
+                throw new IOException("Python-era MCP " + filename + " is empty or missing a CSV header");
+            var first = rows.next();
+            var header = first.getHeader();
+            if (!header.contains(keyColumn) || !header.contains("name") || !header.contains("side"))
+                throw new IOException("Python-era MCP " + filename + " is missing required columns: " + keyColumn + ", name, side");
+            var hasDescription = header.contains("desc");
+
+            do {
+                var row = first;
+                var id = row.getField(keyColumn).strip();
+                var name = row.getField("name").strip();
+                var sideText = row.getField("side").strip();
+                int side;
+                try {
+                    side = Integer.parseInt(sideText);
+                } catch (NumberFormatException e) {
+                    throw new IOException("Invalid side value in Python-era MCP " + filename + ": " + sideText, e);
+                }
+                var description = hasDescription ? row.getField("desc").strip() : "";
+
+                var existing = entries.get(id);
+                if (existing == null) {
+                    existing = new PythonMappingEntry(name, description);
+                    entries.put(id, existing);
+                } else {
+                    if (existing.name.isEmpty() && !name.isEmpty())
+                        existing.name = name;
+                    if (hasDescription && description.length() > existing.description.length())
+                        existing.description = description;
+                }
+                existing.sides.add(side);
+                if (!rows.hasNext())
+                    break;
+                first = rows.next();
+            } while (true);
+
+            var uncloseable = new OutputStreamWriter(output, StandardCharsets.UTF_8) {
+                @Override
+                public void close() throws IOException {
+                    flush();
+                }
+            };
+            try (var writer = CsvWriter.builder().lineDelimiter(LineDelimiter.LF).build(uncloseable)) {
+                writer.writeRecord(hasDescription
+                    ? new String[] { keyColumn, "name", "side", "desc" }
+                    : new String[] { keyColumn, "name", "side" });
+                for (var entry : entries.entrySet()) {
+                    var value = entry.getValue();
+                    var side = value.sides.contains(2) || (value.sides.contains(0) && value.sides.contains(1))
+                        ? 2
+                        : value.sides.iterator().next();
+                    writer.writeRecord(hasDescription
+                        ? new String[] { entry.getKey(), value.name, Integer.toString(side), value.description }
+                        : new String[] { entry.getKey(), value.name, Integer.toString(side) });
+                }
+            }
+        }
+    }
+
+    private static final class PythonMappingEntry {
+        private String name;
+        private final LinkedHashSet<Integer> sides = new LinkedHashSet<>();
+        private String description;
+
+        private PythonMappingEntry(String name, String description) {
+            this.name = name;
+            this.description = description;
+        }
     }
 
     public int getJavaTarget() {
@@ -546,12 +728,7 @@ public class MCPLegacy {
                 if (filtered)
                     continue;
 
-                var newEntry = new ZipEntry(entry.getName());
-                newEntry.setSize(entry.getSize());
-                newEntry.setTime(entry.getTime());
-                zout.putNextEntry(newEntry);
-                zin.transferTo(zout);
-                zout.closeEntry();
+                copyZipEntry(zin, zout, entry);
             }
         } catch (IOException e) {
             return Util.sneak(e);
@@ -559,6 +736,17 @@ public class MCPLegacy {
 
         cache.save();
         return output;
+    }
+
+    static void copyZipEntry(ZipInputStream input, ZipOutputStream output, ZipEntry entry) throws IOException {
+        var copy = new ZipEntry(entry.getName());
+        if (entry.getSize() >= 0)
+            copy.setSize(entry.getSize());
+        if (entry.getTime() >= 0)
+            copy.setTime(entry.getTime());
+        output.putNextEntry(copy);
+        input.transferTo(output);
+        output.closeEntry();
     }
 
     public class Child {

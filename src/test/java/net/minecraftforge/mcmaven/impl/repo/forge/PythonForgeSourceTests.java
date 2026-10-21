@@ -62,6 +62,91 @@ public class PythonForgeSourceTests {
     }
 
     @Test
+    void createsMinimalUserdevConfigWhenLegacySourceHasNoFmlJson(@TempDir Path temp) throws Exception {
+        var source = temp.resolve("source.zip").toFile();
+        var output = temp.resolve("userdev.jar").toFile();
+        try (var zip = new ZipOutputStream(java.nio.file.Files.newOutputStream(source.toPath()))) {
+            entry(zip, "forge/fml/conf/version.cfg", "[VERSION]\nMCPVersion = 7.51\n");
+            entry(zip, "forge/fml/conf/packages.csv", "class,package\n");
+            entry(zip, "forge/fml/conf/patches/minecraft_ff.patch", "fernflower fixes");
+            entry(zip, "forge/fml/conf/fields.csv", "searge,name\n");
+            entry(zip, "forge/fml/conf/methods.csv", "searge,name\n");
+            entry(zip, "forge/fml/conf/params.csv", "param,name\n");
+            entry(zip, "forge/fml/common/fml_at.cfg", "fml access");
+            entry(zip, "forge/common/forge_at.cfg", "forge access");
+        }
+
+        PythonForgeSource.prepare(output, source);
+
+        try (var zip = new ZipFile(output)) {
+            var config = text(zip, "dev.json");
+            Assertions.assertTrue(config.contains("\"name\":\"com.google.guava:guava:14.0\""));
+            Assertions.assertTrue(config.contains("\"name\":\"argo:argo:2.25_fixed\""));
+            Assertions.assertTrue(config.contains("\"name\":\"org.bouncycastle:bcprov-jdk15on:1.47\""));
+            Assertions.assertTrue(config.contains("\"name\":\"com.paulscode:codecjorbis:20101023\""));
+            Assertions.assertTrue(config.contains("\"name\":\"com.paulscode:soundsystem:20120107\""));
+        }
+    }
+
+    @Test
+    void filtersThirdPartySourcesOnlyFromCompilationArchive(@TempDir Path temp) throws Exception {
+        var source = temp.resolve("sources.jar").toFile();
+        try (var zip = new ZipOutputStream(java.nio.file.Files.newOutputStream(source.toPath()))) {
+            entry(zip, "argo/jdom/JsonNodeBuilders.java", "Argo source");
+            entry(zip, "com/jcraft/jogg/Buffer.java", "JOrbis dependency source");
+            entry(zip, "com/jcraft/jorbis/Comment.java", "JOrbis source");
+            entry(zip, "org/bouncycastle/crypto/io/CipherInputStream.java", "BouncyCastle source");
+            entry(zip, "paulscode/sound/SoundSystem.java", "Paulscode source");
+            entry(zip, "paulscode/sound/libraries/LibraryJavaSound.java", "Library source");
+            entry(zip, "paulscode/sound/libraries/LibraryJavaSound$MixerRanking.java", "Library inner source");
+            entry(zip, "paulscode/sound/libraries/LibraryLWJGLOpenAL.java", "OpenAL library source");
+            entry(zip, "paulscode/sound/codecs/CodecWav.java", "WAV codec source");
+            entry(zip, "paulscode/sound/codecs/CodecJOrbis.java", """
+                protected InputStream openInputStream()
+                {
+                }
+                private boolean readHeader()
+                {
+                }
+                """);
+            entry(zip, "net/minecraftforge/client/ModCompatibilityClient.java", """
+                    SoundSystemConfig.setCodec("xm",  CodecIBXM.class);
+                    SoundSystemConfig.setCodec("s3m", CodecIBXM.class);
+                    SoundSystemConfig.setCodec("mod", CodecIBXM.class);
+                """);
+            entry(zip, "paulscode/sound/codecs/CodecIBXM.java", "Bundled source without external class");
+            entry(zip, "net/minecraft/Example.java", "Minecraft source");
+            entry(zip, "argo/data.txt", "non-Java resource");
+        }
+
+        var filtered = PythonForgeSource.filterThirdPartySources(
+            temp.toFile(),
+            net.minecraftforge.mcmaven.impl.util.Task.named("sources", () -> source)
+        ).execute();
+
+        try (var zip = new ZipFile(filtered)) {
+            Assertions.assertNull(zip.getEntry("argo/jdom/JsonNodeBuilders.java"));
+            Assertions.assertNull(zip.getEntry("com/jcraft/jogg/Buffer.java"));
+            Assertions.assertNull(zip.getEntry("com/jcraft/jorbis/Comment.java"));
+            Assertions.assertNull(zip.getEntry("org/bouncycastle/crypto/io/CipherInputStream.java"));
+            Assertions.assertNull(zip.getEntry("paulscode/sound/SoundSystem.java"));
+            Assertions.assertNull(zip.getEntry("paulscode/sound/libraries/LibraryJavaSound.java"));
+            Assertions.assertNull(zip.getEntry("paulscode/sound/libraries/LibraryJavaSound$MixerRanking.java"));
+            Assertions.assertNull(zip.getEntry("paulscode/sound/libraries/LibraryLWJGLOpenAL.java"));
+            Assertions.assertNull(zip.getEntry("paulscode/sound/codecs/CodecWav.java"));
+            var codecSource = text(zip, "paulscode/sound/codecs/CodecJOrbis.java");
+            Assertions.assertTrue(codecSource.contains("protected InputStream openInputStream() throws IOException"));
+            Assertions.assertTrue(codecSource.contains("private boolean readHeader() throws IOException"));
+            var forgeSource = text(zip, "net/minecraftforge/client/ModCompatibilityClient.java");
+            Assertions.assertTrue(forgeSource.contains("catch (paulscode.sound.SoundSystemException e)"));
+            Assertions.assertTrue(forgeSource.contains("Failed to register IBXM codecs"));
+            Assertions.assertEquals("Bundled source without external class", text(zip, "paulscode/sound/codecs/CodecIBXM.java"));
+            Assertions.assertEquals("Minecraft source", text(zip, "net/minecraft/Example.java"));
+            Assertions.assertEquals("non-Java resource", text(zip, "argo/data.txt"));
+        }
+    }
+
+    @Test
     void rejectsInvalidPathsInSourceArchive(@TempDir Path temp) throws Exception {
         var source = temp.resolve("source.zip").toFile();
         try (var zip = new ZipOutputStream(java.nio.file.Files.newOutputStream(source.toPath()))) {

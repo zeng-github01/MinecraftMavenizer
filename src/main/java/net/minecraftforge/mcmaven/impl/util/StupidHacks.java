@@ -175,15 +175,20 @@ public class StupidHacks {
         mappings("1.14.4",              "official");
     }
     public static Mappings getDefaultMappings(ComparableVersion forgeVersion) {
+        var mappings = findDefaultMappings(forgeVersion);
+        if (mappings == null)
+            throw new IllegalStateException("Could not determine default mappings for " + forgeVersion);
+        return mappings;
+    }
+
+    public static @Nullable Mappings findDefaultMappings(ComparableVersion forgeVersion) {
         String version = null;
         for (var map : FORGE_MAPPINGS) {
             if (forgeVersion.compareTo(map.start) < 0)
                 break;
             version = map.mappings();
         }
-        if (version == null)
-            throw new IllegalStateException("Could not determine default mappings for " + forgeVersion);
-        return Mappings.of(version);
+        return version == null ? null : Mappings.of(version);
     }
 
     // List of 'bad' forge builds that are just broke for some reason and we explicitly don't want to support

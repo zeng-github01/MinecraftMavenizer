@@ -37,6 +37,7 @@ public abstract class Mappings {
             case "snapshot_nodoc":
             case "stable":
             case "stable_nodoc":
+            case "mcp":
                 return new MCPMappings(channel, version);
             case "srg":
                 return new SRGMappings("srg", version);

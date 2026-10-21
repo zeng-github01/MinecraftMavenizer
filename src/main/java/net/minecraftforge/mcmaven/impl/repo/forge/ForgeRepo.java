@@ -106,6 +106,21 @@ public final class ForgeRepo extends Repo {
         return ver.compareTo(PYTHON_START) >= 0 && ver.compareTo(PYTHON_END) < 0;
     }
 
+    public Mappings getDefaultMappings(String version) {
+        var forgeVersion = new ComparableVersion(version);
+        var mappings = StupidHacks.findDefaultMappings(forgeVersion);
+        if (mappings != null)
+            return mappings;
+        if (!isPython(version))
+            throw new IllegalStateException("Could not determine default mappings for " + forgeVersion);
+
+        var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
+        var sourceZip = this.cache.maven().download(source);
+        var mcpVersion = PythonForgeSource.readMcpVersion(sourceZip);
+        LOGGER.info("No default mappings for " + version + "; using synthesized mcp:" + mcpVersion);
+        return Mappings.of("mcp", mcpVersion);
+    }
+
     @Override
     public List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         var module = artifact.getGroup() + ':' + artifact.getName();
@@ -199,14 +214,22 @@ public final class ForgeRepo extends Repo {
         // v1 and v1.1 have Forge patches in mapped names, and I haven't implemented converting to SRG yet as it would need to run Srg2Source
         // So check if we are using the 'correct' mappings, and if not throw and exception
         if (fgVersion == FGVersion.v1 || fgVersion == FGVersion.v1_1) {
-            var required = StupidHacks.getDefaultMappings(new ComparableVersion(version));
+            var required = StupidHacks.findDefaultMappings(new ComparableVersion(version));
+            if (required == null && pythonSource != null)
+                required = Mappings.of("mcp", pythonSource.mcpVersion());
+            if (required == null)
+                throw new IllegalStateException("Could not determine default mappings for " + version);
             if (!required.equals(mappings))
-                throw new IllegalStateException("Can not setup " + name + " as it requires you to us the explicit mappings: " + required.toString());
+                throw new IllegalStateException("Can not setup " + name + " as it requires you to ues the explicit mappings: " + required.toString());
             sourcesTask = dev.getSourcesWithJavadocs();
         } else if (!mappings.channel().equals("srg")) {
             sourcesTask = new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
         }
-        var classesTask = new RecompileTask(build, name, jdks, dev.getJavaTarget(), dev::getClasspath, sourcesTask, mappings);
+        var compileSources = pythonSource != null
+            && new ComparableVersion(mcVersion).compareTo(new ComparableVersion("1.6.4")) < 0
+                ? PythonForgeSource.filterThirdPartySources(build, sourcesTask)
+                : sourcesTask;
+        var classesTask = new RecompileTask(build, name, jdks, dev.getJavaTarget(), dev::getClasspath, compileSources, mappings);
 
         var mappingCoords = mappings.getArtifact();
 

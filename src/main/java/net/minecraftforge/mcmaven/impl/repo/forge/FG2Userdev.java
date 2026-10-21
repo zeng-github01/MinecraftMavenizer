@@ -156,6 +156,10 @@ public class FG2Userdev implements ForgeVersionCommon {
         return this.mcp;
     }
 
+    public boolean isPythonSource() {
+        return this.pythonSource;
+    }
+
     public @Nullable byte[] getExtraMappings() {
         return this.extraMappings;
     }

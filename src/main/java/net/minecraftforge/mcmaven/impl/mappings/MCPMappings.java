@@ -55,7 +55,9 @@ public class MCPMappings extends Mappings {
     }
 
     private ResolvedMappings withContextImpl(FG2Userdev fg2) {
-        var csv = downloadCsv(fg2.getCache().maven());
+        var csv = channel().equals("mcp") && fg2.isPythonSource()
+            ? fg2.getMCP().getPythonMappingCsv()
+            : downloadCsv(fg2.getCache().maven());
         var root = new File(fg2.getBuildFolder(), "data/mapings");
         var artifact = this.getArtifact(fg2);
         var mappings = fg2.getMCP().getMappings();

@@ -209,7 +209,7 @@ public record MinecraftMaven(
                 if (!ForgeRepo.isSupported(ver))
                     continue;
 
-                var primary = StupidHacks.getDefaultMappings(cver).withMCVersion(mcVersion);
+                var primary = repo.getDefaultMappings(ver).withMCVersion(mcVersion);
                 if (this.mappings == null) {
                     if (mappings == null || !mappings.equals(primary))
                         LOGGER.info("Using Mappings: " + primary);
@@ -234,7 +234,7 @@ public record MinecraftMaven(
                 throw new IllegalArgumentException("Forge version " + artifact.getVersion() + " has been blacklisted for technical reasons, pick a different Forge version");
 
             var mcVersion = Util.forgeToMcVersion(version);
-            var primary = StupidHacks.getDefaultMappings(new ComparableVersion(version)).withMCVersion(mcVersion);
+            var primary = repo.getDefaultMappings(version).withMCVersion(mcVersion);
             var mappings = resolve(primary, mcVersion);
 
             var artifacts = repo.process(artifact, mappings, outputJson);

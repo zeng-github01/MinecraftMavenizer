@@ -23,7 +23,7 @@ As such anything that can call a executable jar, should be able to use this. Ope
     - Facade and Access Transformer static post processors
   - TODO:
     - Legacy Forge versions.
-       - Python-era Forge versions have an experimental path for `src` archives rooted at `forge/`, using their MCP version, `packages.csv` package remapping, FML Fernflower fixes, and FML/Forge patch sets. The requested mapping channel remains separate from the legacy MCP package data. Individual historical releases may still need compatibility fixes.
+       - Python-era Forge versions have an experimental path for `src` archives rooted at `forge/`, using their MCP version, `packages.csv` package remapping, FML Fernflower fixes, and FML/Forge patch sets. Older source archives without `forge/fml/fml.json` receive a compatibility userdev config. Corrupt legacy MCP downloads are detected and fetched again. When a release has no Forge default mapping, Mavenizer synthesizes its default from the MCP archive CSVs and publishes it as `mcp:<MCPVersion>` (for example, `mcp:7.8`); duplicate CSV rows are merged by mapping ID with side flags and the most complete name/description retained. The requested mapping channel remains separate from the legacy MCP package data. Individual historical releases may still need compatibility fixes.
      - Support Artifact Transformers allowing ModLauncher/Mixin/Whatever to apply static transformation of artifacts? Probably not needed.
      - Deobfuscating arbitrary dependencies. Basically a replacement for `fg.deobf` allowing mods to be used in different mappings then they are released.
 
@@ -78,6 +78,7 @@ Supported Mapping Channels:
   - `official`: Official mappings provided by Mojang, located by the launcher's version.json file. Only available for versions Mojang has released the mappings for.
   - `notch`: Also known as obfusicated, the raw names of the class as Mojang released them. Note: Mojang is intending to remove obfusication, so for versions that don't have obf, `notch` will not be supported.
   - `srg` or `searge`: The intermediate names used by MCPConfig to make the code readable. One step above `notch`.
+  - `mcp`: Synthesized SRG-to-MCP mappings for Python-era Forge releases without a Forge default mapping. Use the MCP version from that Forge source release, for example `mcp:7.8`.
   - `parchment`: A layer over the `official` mappings that add parameter names, and javadoc. See https://parchmentmc.org/
 
 
@@ -101,7 +102,10 @@ For artifacts that support mappings, we also generate a [Gradle Module File](htt
    - `mappings-version.jar`: A archive containing csv files mapping SRG intermediate names to the specified mapping. This is mainly intended for old versions which use SRG at runtime, and need to runtime remap reflection to mapped names.
  
  ### For `net.minecraftforge:forge`:
- Currently only UserDev3 files are supported.
+ UserDev3 and supported historical Python-era Forge source archives are supported. Python-era versions are prepared from their source and MCP archives instead of expecting a Gradle userdev artifact; if Forge has no published default mappings, the MCP version declared in its source archive is used.
+
+ For Minecraft versions older than 1.6.4, Mavenizer creates a separate compile-only source archive: third-party Java sources with matching declared library dependencies are omitted, and known decompiler-generated Java errors are repaired in that temporary compile input. The original source archive used for the published sources artifact is unchanged.
+
  Generating this artifact will automatically generate the appropriate `net.minecraft:client-extra`, and `net.minecraft:mappings` artifacts.
    - `forge-version.jar`: Main artifact, contains classes and a data for the game. This supports mappings, as such specific versions are referenced in the module file.
    - `forge-version-sources.jar`: The sources for this artifact. This supports mappings, as such specific versions are referenced in the module file.

@@ -37,7 +37,7 @@ final class PythonForgeSource {
         "paulscode/sound/codecs/CodecWav"
     };
 
-    record Prepared(File userdev, String mcpArchive, String mcpVersion) {}
+    record Prepared(File userdev, String pythonMcpArchive, String mcpVersion) {}
 
     private PythonForgeSource() {}
 
@@ -196,7 +196,7 @@ final class PythonForgeSource {
         if (version == null || version.isBlank())
             throw new IllegalStateException("Missing MCPVersion in " + FML + "conf/version.cfg");
         version = version.trim();
-        if (!version.matches("\\d+(?:\\.\\d+)*"))
+        if (!version.matches("\\d+(?:\\.\\d+)*(?:[a-zA-Z])?"))
             throw new IllegalStateException("Invalid MCPVersion in " + FML + "conf/version.cfg: " + version);
         return version;
     }

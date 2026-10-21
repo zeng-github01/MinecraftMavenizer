@@ -23,7 +23,7 @@ public class PythonForgeSourceTests {
 
         try (var zip = new ZipOutputStream(java.nio.file.Files.newOutputStream(source.toPath()))) {
             entry(zip, "forge/fml/fml.json", "{\"libraries\":[]}");
-            entry(zip, "forge/fml/conf/version.cfg", "[VERSION]\nMCPVersion = 8.11\n");
+            entry(zip, "forge/fml/conf/version.cfg", "[VERSION]\nMCPVersion = 7.26a\n");
             entry(zip, "forge/fml/conf/packages.csv", "class,package\nGuiScreen,net/minecraft/client/gui\n");
             entry(zip, "forge/fml/conf/patches/minecraft_ff.patch", "fernflower fixes");
             entry(zip, "forge/fml/conf/joined.srg", "CL: awe net/minecraft/src/GuiScreen\nMD: awe/a ()Lawe; net/minecraft/src/GuiScreen/func_1_a ()Lnet/minecraft/src/GuiScreen;\n");
@@ -40,7 +40,8 @@ public class PythonForgeSourceTests {
 
         var prepared = PythonForgeSource.prepare(output, source);
 
-        Assertions.assertEquals("mcp811.zip", prepared.mcpArchive());
+        Assertions.assertEquals("7.26a", prepared.mcpVersion());
+        Assertions.assertEquals("mcp726a.zip", prepared.pythonMcpArchive());
         try (var zip = new ZipFile(prepared.userdev())) {
             Assertions.assertEquals("{\"libraries\":[]}", text(zip, "dev.json"));
             Assertions.assertEquals("Forge", text(zip, "src/main/java/example/Example.java"));

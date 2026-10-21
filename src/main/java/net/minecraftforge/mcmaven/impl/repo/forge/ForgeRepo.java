@@ -203,7 +203,7 @@ public final class ForgeRepo extends Repo {
 
         var dev = pythonSource == null
             ? new FG2Userdev(build, this, userdev, fgVersion)
-            : new FG2Userdev(build, this, userdev, fgVersion, pythonSource.userdev(), pythonSource.mcpArchive());
+            : new FG2Userdev(build, this, userdev, fgVersion, pythonSource.userdev(), pythonSource.pythonMcpArchive());
         var mcVersion = Util.forgeToMcVersion(version);
         var srgTask = dev.getMCP().getMappings();
         var srgSources = dev.getSources();

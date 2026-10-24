@@ -15,9 +15,14 @@ import java.util.regex.Pattern;
 
 import de.siegmar.fastcsv.reader.CsvReader;
 
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.regex.*;
+
 public final class LegacyPackageMappings {
-    private static final Pattern LEGACY_CLASS = Pattern.compile("net/minecraft/src/(\\w+)");
-    private static final Pattern LEGACY_PATCH_CLASS = Pattern.compile("net[\\\\/]minecraft[\\\\/]src[\\\\/](\\w+)");
+    private static final Pattern LEGACY_CLASS = Pattern.compile("net/minecraft/src/([a-zA-Z0-9_$]+)");
+    private static final Pattern LEGACY_PATCH_CLASS = Pattern.compile("net[\\\\/]minecraft[\\\\/]src[\\\\/]([a-zA-Z0-9_$]+)");
 
     private LegacyPackageMappings() {}
 
@@ -34,18 +39,26 @@ public final class LegacyPackageMappings {
         var lines = patch.split("\n", -1);
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
-            if (!line.startsWith("--- ") && !line.startsWith("+++ "))
+            if (!line.startsWith("--- ") && !line.startsWith("+++ ")) {
                 continue;
+            }
 
             var pathStart = 4;
             var pathEnd = line.indexOf('\t', pathStart);
-            if (pathEnd == -1)
+            if (pathEnd == -1) {
                 pathEnd = line.length();
+            }
 
             var path = line.substring(pathStart, pathEnd).replace('\\', '/');
+
             var slash = path.indexOf('/');
-            if (slash != -1 && (path.substring(0, slash).equals("minecraft") || path.substring(0, slash).equals("minecraft_patched")))
-                path = path.substring(slash + 1);
+            if (slash != -1) {
+                var prefix = path.substring(0, slash);
+                if ("minecraft".equals(prefix) || "minecraft_patched".equals(prefix) || "src".equals(prefix)) {
+                    path = path.substring(slash + 1);
+                }
+            }
+
             lines[i] = line.substring(0, pathStart) + path + line.substring(pathEnd);
         }
         return String.join("\n", lines);
@@ -53,11 +66,23 @@ public final class LegacyPackageMappings {
 
     private static Map<String, String> readPackages(byte[] packages) throws IOException {
         var classPackages = new HashMap<String, String>();
-        try (var reader = CsvReader.builder().ofNamedCsvRecord(
-            new InputStreamReader(new ByteArrayInputStream(packages), StandardCharsets.UTF_8)
-        )) {
-            for (var row : reader)
-                classPackages.put(row.getField("class"), row.getField("package"));
+        try (var reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(packages), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) continue;
+
+                var parts = line.split(",", -1);
+                if (parts.length >= 2) {
+                    var cls = parts[0].trim();
+                    var pkg = parts[1].trim();
+
+                    if ("class".equalsIgnoreCase(cls) && "package".equalsIgnoreCase(pkg)) {
+                        continue;
+                    }
+                    classPackages.put(cls, pkg);
+                }
+            }
         }
         return classPackages;
     }
@@ -66,9 +91,18 @@ public final class LegacyPackageMappings {
         var matcher = pattern.matcher(input);
         var output = new StringBuffer(input.length());
         while (matcher.find()) {
-            var targetPackage = classPackages.get(matcher.group(1));
-            if (targetPackage != null)
-                matcher.appendReplacement(output, Matcher.quoteReplacement(targetPackage + '/' + matcher.group(1)));
+            var simpleName = matcher.group(1);
+
+            var rootClass = simpleName.contains("$") ? simpleName.substring(0, simpleName.indexOf('$')) : simpleName;
+            var targetPackage = classPackages.get(simpleName);
+            if (targetPackage == null) {
+                targetPackage = classPackages.get(rootClass);
+            }
+
+            if (targetPackage != null) {
+                String fullPath = targetPackage.isEmpty() ? simpleName : (targetPackage + '/' + simpleName);
+                matcher.appendReplacement(output, Matcher.quoteReplacement(fullPath));
+            }
         }
         matcher.appendTail(output);
         return output.toString();

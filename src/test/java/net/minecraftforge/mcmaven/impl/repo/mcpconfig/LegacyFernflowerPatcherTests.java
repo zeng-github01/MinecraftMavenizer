@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-public class LegacyFernflowerPatchesTests {
+public class LegacyFernflowerPatcherTests {
     @Test
     void appliesLegacyFernflowerPatchAfterPackageRemapping(@TempDir Path temp) throws Exception {
         var input = temp.resolve("decompiled.jar");
@@ -57,7 +57,7 @@ public class LegacyFernflowerPatchesTests {
             zip.closeEntry();
         }
 
-        LegacyFernflowerPatches.apply(input.toFile(), output.toFile(), patch, packageMappings);
+        LegacyFernflowerPatcher.apply(input.toFile(), output.toFile(), patch, packageMappings);
 
         try (var zip = new ZipFile(output.toFile())) {
             var source = new String(zip.getInputStream(zip.getEntry("net/minecraft/client/gui/GuiScreen.java")).readAllBytes(), StandardCharsets.UTF_8);

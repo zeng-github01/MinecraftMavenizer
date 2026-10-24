@@ -50,7 +50,6 @@ public class FG2Userdev implements ForgeVersionCommon {
     private final ForgeRepo forge;
     private final Artifact name;
     private final FGVersion fgVersion;
-    private final boolean pythonSource;
     private final File data;
     private final String dataHash;
     private final MinecraftVersion config;
@@ -65,17 +64,12 @@ public class FG2Userdev implements ForgeVersionCommon {
     private final Map<String, Task> extracts = new HashMap<>();
 
     FG2Userdev(File build, ForgeRepo forge, Artifact name, FGVersion fgVersion) {
-        this(build, forge, name, fgVersion, null, null);
-    }
-
-    FG2Userdev(File build, ForgeRepo forge, Artifact name, FGVersion fgVersion, @Nullable File preparedData, @Nullable String pythonMcp) {
         this.build = build;
         this.forge = forge;
         this.name = name;
         this.fgVersion = fgVersion;
-        this.pythonSource = pythonMcp != null;
 
-        this.data = preparedData == null ? this.forge.getCache().maven().download(name) : preparedData;
+        this.data = this.forge.getCache().maven().download(name);
         if (!this.data.exists())
             throw new IllegalStateException("Failed to download " + name);
 
@@ -104,12 +98,8 @@ public class FG2Userdev implements ForgeVersionCommon {
         // FG 1.x we need to merge the access transformers, FML and Forge patches are seperate, and source/resources are not in a zip
         var fg1 = this.fgVersion.ordinal() <= FGVersion.v1_2.ordinal();
 
-        var legacyMCP = pythonMcp != null ? pythonMcp : StupidHacks.legacyMcp(new ComparableVersion(this.name.getVersion()));
-        if (this.pythonSource && this.pythonPackages == null)
-            throw except("Missing packages.csv");
-        if (this.pythonSource && this.pythonFernflowerPatch == null)
-            throw except("Missing fernflower.patch");
-        this.mcp = this.forge.mcpconfig.legacy(this.mcVersion, legacyMCP, this.pythonPackages, this.pythonFernflowerPatch);
+        var legacyMCP = StupidHacks.legacyMcp(new ComparableVersion(this.name.getVersion()));
+        this.mcp = this.forge.mcpconfig.legacy(this.mcVersion, legacyMCP);
         var atFile = fg1 ? mergeAts() : extract("merged_at.cfg");
         // 1.7.2 Forge switched to FG1.2 in 1.7.2-10.12.0.1048, this changed our decompiler to
         // a version that bulk sorts all classes. So produces different decomp.

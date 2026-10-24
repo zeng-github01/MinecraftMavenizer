@@ -10,9 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
@@ -21,10 +19,10 @@ import net.minecraftforge.mcmaven.impl.mappings.LegacyPackageMappings;
 import net.minecraftforge.mcmaven.impl.util.ContextualPatch;
 import net.minecraftforge.util.file.FileUtils;
 
-final class LegacyFernflowerPatches {
+final class LegacyFernflowerPatcher {
     private static final Pattern PATCH_SECTION = Pattern.compile("(?m)(?=^diff -r -U \\d+ )");
 
-    private LegacyFernflowerPatches() {}
+    private LegacyFernflowerPatcher() {}
 
     static File apply(File input, File output, byte[] patchData, byte[] packageMappings) throws IOException {
         var patch = LegacyPackageMappings.repackagePatch(new String(patchData, StandardCharsets.UTF_8), packageMappings);

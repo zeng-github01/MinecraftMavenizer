@@ -23,7 +23,8 @@ import net.minecraftforge.util.file.FileUtils;
 final class PythonForgeSource {
     private static final String ROOT = "forge/";
     private static final String FML = ROOT + "fml/";
-    private static final String FORMAT = "python-src-v3";
+    private static final String CONF = FML + "conf/";
+    private static final String FORMAT = "python-src-v5";
 
     record Prepared(File userdev, String mcpArchive) {}
 
@@ -34,8 +35,8 @@ final class PythonForgeSource {
             var version = readMcpVersion(source);
             var mcpArchive = "mcp" + version.replace(".", "") + ".zip";
             var cache = Util.cache(output)
-                .add("source", sourceZip)
-                .addKnown("format", FORMAT);
+                    .add("source", sourceZip)
+                    .addKnown("format", FORMAT);
 
             if (Mavenizer.checkCache(output, cache))
                 return new Prepared(output, mcpArchive);
@@ -43,21 +44,29 @@ final class PythonForgeSource {
             var entries = new LinkedHashMap<String, byte[]>();
             addRequired(source, entries, "dev.json", FML + "fml.json");
             var packages = readRequired(source, FML + "conf/packages.csv");
-            entries.put("packages.csv", packages);
-            addRequired(source, entries, "fernflower.patch", FML + "conf/patches/minecraft_ff.patch");
-            var mappings = readOptional(source, FML + "conf/joined.srg");
-            if (mappings != null)
-                entries.put("merged.srg", LegacyPackageMappings.repackage(mappings, packages));
-            for (var csv : new String[] { "fields.csv", "methods.csv", "params.csv" })
-                addRequired(source, entries, csv, FML + "conf/" + csv);
+
+            var rawffPatch = readRequired(source, FML + "conf/patches/minecraft_ff.patch");
+            entries.put("conf/packaged.patch", LegacyPackageMappings.repackage(rawffPatch, packages));
+
+            var joinedSrg = readRequired(source, FML + "conf/joined.srg");
+            entries.put("conf/packaged.srg", LegacyPackageMappings.repackage(joinedSrg, packages));
+
+            var joinedExc = readRequired(source, FML + "conf/joined.exc");
+            entries.put("conf/packaged.exc", LegacyPackageMappings.repackage(joinedExc, packages));
+
+            for (var csv : new String[]{"fields.csv", "methods.csv", "params.csv"})
+                addRequired(source, entries, "mappings/" + csv, FML + "conf/" + csv);
 
             addRequired(source, entries, "src/main/resources/fml_at.cfg", FML + "common/fml_at.cfg");
             addRequired(source, entries, "src/main/resources/forge_at.cfg", ROOT + "common/forge_at.cfg");
             addPatchArchive(source, entries, "fmlpatches.zip", FML + "patches/minecraft/");
             addPatchArchive(source, entries, "forgepatches.zip", ROOT + "patches/minecraft/");
 
-            for (var prefix : new String[] {
-                FML + "client/", FML + "common/", ROOT + "client/", ROOT + "common/"
+            addRequired(source, entries, "conf/astyle.cfg", CONF + "astyle.cfg");
+            addRequired(source,entries,"conf/mcp_merge.cfg", FML + "mcp_merge.cfg");
+
+            for (var prefix : new String[]{
+                    FML + "client/", FML + "common/", ROOT + "client/", ROOT + "common/"
             })
                 addSourceTree(source, entries, prefix);
 
@@ -126,7 +135,7 @@ final class PythonForgeSource {
     private static void addPatchArchive(ZipFile source, Map<String, byte[]> entries, String outputName, String prefix) throws IOException {
         var patches = new ByteArrayOutputStream();
         try (var out = new ZipOutputStream(patches)) {
-            for (var enumeration = source.entries(); enumeration.hasMoreElements();) {
+            for (var enumeration = source.entries(); enumeration.hasMoreElements(); ) {
                 var entry = enumeration.nextElement();
                 if (entry.isDirectory() || !entry.getName().startsWith(prefix) || !entry.getName().endsWith(".patch"))
                     continue;
@@ -144,7 +153,7 @@ final class PythonForgeSource {
     }
 
     private static void addSourceTree(ZipFile source, Map<String, byte[]> entries, String prefix) throws IOException {
-        for (var enumeration = source.entries(); enumeration.hasMoreElements();) {
+        for (var enumeration = source.entries(); enumeration.hasMoreElements(); ) {
             var entry = enumeration.nextElement();
             if (entry.isDirectory() || !entry.getName().startsWith(prefix))
                 continue;

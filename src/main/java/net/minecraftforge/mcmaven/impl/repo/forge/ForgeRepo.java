@@ -122,11 +122,12 @@ public final class ForgeRepo extends Repo {
                 if (isPython(version)) {
                     var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
                     var sourceZip = this.cache.maven().download(source);
-                    var prepared = PythonForgeSource.prepare(
-                        new File(this.cache.root(), "forge/python/" + version + "/userdev.jar"),
+                    var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
+                    PythonForgeSource.prepare(
+                        new File(this.cache.maven().getFolder(), output.getLocalPath()),
                         sourceZip
                     );
-                    return processV2(version, mappings, outputJson, FGVersion.v1, prepared);
+                    return processV2(version, mappings, outputJson, FGVersion.v1);
                 }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
             }
@@ -176,19 +177,13 @@ public final class ForgeRepo extends Repo {
     /// - `net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip`
     ///   - A zip file containing fields, methods, and params.csv files mapping SRG->MCP names.
     private List<PendingArtifact> processV2(String version, Mappings baseMappings, Map<String, Supplier<String>> outputJson, FGVersion fgVersion) {
-        return processV2(version, baseMappings, outputJson, fgVersion, null);
-    }
-
-    private List<PendingArtifact> processV2(String version, Mappings baseMappings, Map<String, Supplier<String>> outputJson, FGVersion fgVersion, @Nullable PythonForgeSource.Prepared pythonSource) {
         var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
         var userdev = getUserdev(version);
 
         var build = new File(this.cache.root(), "forge/" + userdev.getFolder());
         var jdks = this.cache.jdks();
 
-        var dev = pythonSource == null
-            ? new FG2Userdev(build, this, userdev, fgVersion)
-            : new FG2Userdev(build, this, userdev, fgVersion, pythonSource.userdev(), pythonSource.mcpArchive());
+        var dev = new FG2Userdev(build, this, userdev, fgVersion);
         var mcVersion = Util.forgeToMcVersion(version);
         var srgTask = dev.getMCP().getMappings();
         var srgSources = dev.getSources();

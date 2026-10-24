@@ -11,12 +11,10 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
-import net.minecraftforge.mcmaven.impl.mappings.LegacyPackageMappings;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.file.FileUtils;
 
@@ -24,35 +22,21 @@ final class PythonForgeSource {
     private static final String ROOT = "forge/";
     private static final String FML = ROOT + "fml/";
     private static final String CONF = FML + "conf/";
-    private static final String FORMAT = "python-src-v5";
-
-    record Prepared(File userdev, String mcpArchive) {}
+    private static final String FORMAT = "python-src-v9";
 
     private PythonForgeSource() {}
 
-    static Prepared prepare(File output, File sourceZip) {
+    static void prepare(File output, File sourceZip) {
         try (var source = new ZipFile(sourceZip)) {
-            var version = readMcpVersion(source);
-            var mcpArchive = "mcp" + version.replace(".", "") + ".zip";
             var cache = Util.cache(output)
                     .add("source", sourceZip)
                     .addKnown("format", FORMAT);
 
             if (Mavenizer.checkCache(output, cache))
-                return new Prepared(output, mcpArchive);
+                return;
 
             var entries = new LinkedHashMap<String, byte[]>();
             addRequired(source, entries, "dev.json", FML + "fml.json");
-            var packages = readRequired(source, FML + "conf/packages.csv");
-
-            var rawffPatch = readRequired(source, FML + "conf/patches/minecraft_ff.patch");
-            entries.put("conf/packaged.patch", LegacyPackageMappings.repackage(rawffPatch, packages));
-
-            var joinedSrg = readRequired(source, FML + "conf/joined.srg");
-            entries.put("conf/packaged.srg", LegacyPackageMappings.repackage(joinedSrg, packages));
-
-            var joinedExc = readRequired(source, FML + "conf/joined.exc");
-            entries.put("conf/packaged.exc", LegacyPackageMappings.repackage(joinedExc, packages));
 
             for (var csv : new String[]{"fields.csv", "methods.csv", "params.csv"})
                 addRequired(source, entries, "mappings/" + csv, FML + "conf/" + csv);
@@ -61,9 +45,6 @@ final class PythonForgeSource {
             addRequired(source, entries, "src/main/resources/forge_at.cfg", ROOT + "common/forge_at.cfg");
             addPatchArchive(source, entries, "fmlpatches.zip", FML + "patches/minecraft/");
             addPatchArchive(source, entries, "forgepatches.zip", ROOT + "patches/minecraft/");
-
-            addRequired(source, entries, "conf/astyle.cfg", CONF + "astyle.cfg");
-            addRequired(source,entries,"conf/mcp_merge.cfg", FML + "mcp_merge.cfg");
 
             for (var prefix : new String[]{
                     FML + "client/", FML + "common/", ROOT + "client/", ROOT + "common/"
@@ -80,7 +61,6 @@ final class PythonForgeSource {
             }
 
             cache.save();
-            return new Prepared(output, mcpArchive);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to prepare Python-era Forge source archive " + sourceZip.getAbsolutePath(), e);
         }

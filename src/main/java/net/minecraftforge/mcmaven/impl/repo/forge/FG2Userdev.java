@@ -56,8 +56,6 @@ public class FG2Userdev implements ForgeVersionCommon {
     private final String mcVersion;
     private final String forgeVersion;
     private final @Nullable byte[] extraMappings;
-    private final @Nullable byte[] pythonPackages;
-    private final @Nullable byte[] pythonFernflowerPatch;
     private final MCPLegacy mcp;
     private final MCPLegacy.Child mcpChild;
     private final Task sourcesTask;
@@ -85,10 +83,6 @@ public class FG2Userdev implements ForgeVersionCommon {
 
             entry = zip.getEntry("merged.srg");
             this.extraMappings = entry == null ? null : zip.getInputStream(entry).readAllBytes();
-            entry = zip.getEntry("packages.csv");
-            this.pythonPackages = entry == null ? null : zip.getInputStream(entry).readAllBytes();
-            entry = zip.getEntry("fernflower.patch");
-            this.pythonFernflowerPatch = entry == null ? null : zip.getInputStream(entry).readAllBytes();
         } catch (IOException e) {
             throw except("Error reading config", e);
         }

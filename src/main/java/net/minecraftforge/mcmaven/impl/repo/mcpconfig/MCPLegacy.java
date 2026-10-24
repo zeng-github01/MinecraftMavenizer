@@ -28,7 +28,6 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.google.gson.reflect.TypeToken;
@@ -525,45 +524,6 @@ public class MCPLegacy {
         return output;
     }
 
-    private File applyFernflowerPatches(File input) {
-        var output = new File(this.build, "fernflower-fixed.jar");
-        var cache = Util.cache(output)
-                .add("input", input)
-                .addKnown("mcp", MCPLegacy.this.dataHash);
-
-        if (Mavenizer.checkCache(output, cache))
-            return output;
-
-        try {
-            byte[] patchData = getPatchData();
-
-            LegacyFernflowerPatcher.apply(input, output, patchData, new byte[0]);
-
-            cache.save();
-            return output;
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to apply Python-era Fernflower patches", e);
-        }
-    }
-
-    private byte @NotNull [] getPatchData() throws IOException {
-        byte[] patchData = null;
-        try (var zip = new ZipFile(MCPLegacy.this.data)) {
-            var entry = zip.getEntry("patches/minecraft_ff.patch");
-            if (entry == null) entry = zip.getEntry("conf/patches/minecraft_ff.patch");
-            if (entry != null) {
-                try (var stream = zip.getInputStream(entry)) {
-                    patchData = stream.readAllBytes();
-                }
-            }
-        }
-
-        if (patchData == null) {
-            throw new IllegalStateException("Missing minecraft_ff.patch in " + MCPLegacy.this.data.getName());
-        }
-        return patchData;
-    }
-
     public class Child {
         private final MavenCache maven;
         private final JDKCache jdks;
@@ -661,17 +621,8 @@ public class MCPLegacy {
 
         private Task cleanup() {
             var input = this.decompile();
-
-            if (MCPLegacy.this.isPython) {
-                var decompiled = input;
-                input = Task.named(prefix + "fernflower-fixes",
-                        Task.deps(decompiled), () -> applyFernflowerPatches(decompiled.execute())
-                );
-            }
-
-            var cleanedInput = input;
             return Task.named(prefix + "cleanup",
-                    Task.deps(cleanedInput), () -> cleanup(cleanedInput.execute())
+                Task.deps(input), () -> cleanup(input.execute())
             );
         }
 

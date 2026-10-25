@@ -42,7 +42,7 @@ final class PythonForgeSource {
                 return new Prepared(output, mcpArchive);
 
             var entries = new LinkedHashMap<String, byte[]>();
-            addRequired(source, entries, "dev.json", FML + "fml.json");
+            addOptional(source, entries, "dev.json", FML + "fml.json");
             var packages = readRequired(source, FML + "conf/packages.csv");
 
             var rawffPatch = readRequired(source, FML + "conf/patches/minecraft_ff.patch");

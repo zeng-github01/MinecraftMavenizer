@@ -24,29 +24,25 @@ final class PythonForgeSource {
     private static final String ROOT = "forge/";
     private static final String FML = ROOT + "fml/";
     private static final String CONF = FML + "conf/";
-    private static final String FORMAT = "python-src-v5";
-
-    record Prepared(File userdev, String mcpArchive) {}
+    private static final String FORMAT = "python-src-v6";
 
     private PythonForgeSource() {}
 
-    static Prepared prepare(File output, File sourceZip) {
+    static void prepare(File output, File sourceZip) {
         try (var source = new ZipFile(sourceZip)) {
-            var version = readMcpVersion(source);
-            var mcpArchive = "mcp" + version.replace(".", "") + ".zip";
             var cache = Util.cache(output)
                     .add("source", sourceZip)
                     .addKnown("format", FORMAT);
 
             if (Mavenizer.checkCache(output, cache))
-                return new Prepared(output, mcpArchive);
+                return;
 
             var entries = new LinkedHashMap<String, byte[]>();
             addOptional(source, entries, "dev.json", FML + "fml.json");
             var packages = readRequired(source, FML + "conf/packages.csv");
 
             var rawffPatch = readRequired(source, FML + "conf/patches/minecraft_ff.patch");
-            entries.put("conf/packaged.patch", LegacyPackageMappings.repackage(rawffPatch, packages));
+            entries.put("conf/packaged.patch", LegacyPackageMappings.repackagePatch(rawffPatch, packages));
 
             var joinedSrg = readRequired(source, FML + "conf/joined.srg");
             entries.put("conf/packaged.srg", LegacyPackageMappings.repackage(joinedSrg, packages));
@@ -80,7 +76,6 @@ final class PythonForgeSource {
             }
 
             cache.save();
-            return new Prepared(output, mcpArchive);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to prepare Python-era Forge source archive " + sourceZip.getAbsolutePath(), e);
         }

@@ -19,6 +19,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+import net.minecraftforge.mcmaven.impl.cache.Cache;
+import net.minecraftforge.mcmaven.impl.repo.forge.PythonForgeSource;
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
@@ -150,6 +152,7 @@ public class StupidHacks {
     }
     static {
         // FG 1.x, these were packed in the userdev. Manually uploaded
+        mappings("1.5.2-7.8.1.738","snapshot:20130427-1.5.2");
         mappings("1.6.3-9.11.0.873",         "snapshot:20130918-1.6.3");
         mappings("1.7.2-10.12.0.967",        "snapshot:20131226-1.7.2");
         mappings("1.7.2-10.12.0.1024",       "snapshot:20140205-1.7.2");
@@ -184,6 +187,18 @@ public class StupidHacks {
         if (version == null)
             throw new IllegalStateException("Could not determine default mappings for " + forgeVersion);
         return Mappings.of(version);
+    }
+
+    public static Mappings getDefaultMappings(Cache cache, ComparableVersion forgeVersion) {
+        try {
+           return getDefaultMappings(forgeVersion);
+        } catch (IllegalStateException _) {
+            var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forgeVersion.toString(), "src", "zip");
+            var sourceZip = cache.maven().download(source);
+            var snapshotVersion = PythonForgeSource.getSnapshotVersion(sourceZip);
+            LOGGER.info("No default mappings for " + forgeVersion + "; using generated snapshot:" + snapshotVersion);
+            return Mappings.of("snapshot", snapshotVersion);
+        }
     }
 
     // List of 'bad' forge builds that are just broke for some reason and we explicitly don't want to support

@@ -194,7 +194,7 @@ public final class ForgeRepo extends Repo {
         // v1 and v1.1 have Forge patches in mapped names, and I haven't implemented converting to SRG yet as it would need to run Srg2Source
         // So check if we are using the 'correct' mappings, and if not throw and exception
         if (fgVersion == FGVersion.v1 || fgVersion == FGVersion.v1_1) {
-            var required = StupidHacks.getDefaultMappings(new ComparableVersion(version));
+            var required = StupidHacks.getDefaultMappings(cache, new ComparableVersion(version));
             if (!required.equals(mappings))
                 throw new IllegalStateException("Can not setup " + name + " as it requires you to us the explicit mappings: " + required.toString());
             sourcesTask = dev.getSourcesWithJavadocs();

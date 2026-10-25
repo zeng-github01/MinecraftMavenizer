@@ -8,6 +8,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -20,7 +24,7 @@ import net.minecraftforge.mcmaven.impl.mappings.LegacyPackageMappings;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.file.FileUtils;
 
-final class PythonForgeSource {
+public final class PythonForgeSource {
     private static final String ROOT = "forge/";
     private static final String FML = ROOT + "fml/";
     private static final String CONF = FML + "conf/";
@@ -38,7 +42,19 @@ final class PythonForgeSource {
                 return;
 
             var entries = new LinkedHashMap<String, byte[]>();
-            addOptional(source, entries, "dev.json", FML + "fml.json");
+            if (!addOptional(source, entries, "dev.json", FML + "fml.json")) {
+                entries.put("dev.json", """
+    {
+      "libraries": [
+        { "name": "net.minecraft:launchwrapper:1.5" },
+        { "name": "org.ow2.asm:asm-all:4.1" },
+        { "name": "net.sourceforge.argo:argo:3.2-small" },
+        { "name": "org.bouncycastle:bcprov-jdk15on:148" },
+        { "name": "com.google.guava:guava:14.0-rc3" }
+      ]
+    }
+    """.getBytes(StandardCharsets.UTF_8));
+            }
             var packages = readRequired(source, FML + "conf/packages.csv");
 
             var rawffPatch = readRequired(source, FML + "conf/patches/minecraft_ff.patch");
@@ -170,5 +186,32 @@ final class PythonForgeSource {
                 throw new IllegalStateException("Invalid path in Python-era Forge source archive: " + name);
         }
         return normalized;
+    }
+
+    public static String getSnapshotVersion(File source) {
+        try (var mcp = new ZipFile(source)) {
+            var fields = mcp.getEntry(CONF+ "fields.csv");
+            if (fields == null)
+                throw new IllegalStateException("Python-era MCP archive is missing conf/fields.csv: " + source);
+            var modified = fields.getTime();
+            if (modified < 0)
+                throw new IllegalStateException("Python-era MCP conf/fields.csv has no modification time: " + source);
+
+            var versionEntry = mcp.getEntry(CONF+ "version.cfg");
+            if (versionEntry == null)
+                throw new IllegalStateException("Python-era MCP archive is missing conf/version.cfg: " + source);
+            var properties = new Properties();
+            try (var input = mcp.getInputStream(versionEntry)) {
+                properties.load(input);
+            }
+            var minecraftVersion = properties.getProperty("ClientVersion");
+            if (minecraftVersion == null || minecraftVersion.isBlank())
+                throw new IllegalStateException("Python-era MCP conf/version.cfg is missing ClientVersion: " + source);
+
+            var date = Instant.ofEpochMilli(modified).atZone(ZoneOffset.UTC).toLocalDate();
+            return DateTimeFormatter.BASIC_ISO_DATE.format(date) + '-' + minecraftVersion.trim();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read Python-era MCP archive " + source.getAbsolutePath(), e);
+        }
     }
 }

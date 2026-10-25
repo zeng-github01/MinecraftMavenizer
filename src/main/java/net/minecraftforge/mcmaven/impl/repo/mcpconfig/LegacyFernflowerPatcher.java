@@ -25,7 +25,7 @@ final class LegacyFernflowerPatcher {
     private LegacyFernflowerPatcher() {}
 
     static File apply(File input, File output, byte[] patchData, byte[] packageMappings) throws IOException {
-        var patch = LegacyPackageMappings.repackagePatch(new String(patchData, StandardCharsets.UTF_8), packageMappings);
+        var patch = LegacyPackageMappings.repackagePatch(patchData, packageMappings);
         var changes = new HashMap<String, List<String>>();
 
         try (var zip = new ZipFile(input)) {
@@ -53,7 +53,7 @@ final class LegacyFernflowerPatcher {
                     }
                 };
             var applied = 0;
-            for (var section : PATCH_SECTION.split(patch)) {
+            for (var section : PATCH_SECTION.split(new String(patch, StandardCharsets.UTF_8))) {
                 if (section.isBlank())
                     continue;
 

@@ -32,8 +32,9 @@ public final class LegacyPackageMappings {
         return replaceClasses(input, classPackages, LEGACY_CLASS).getBytes(StandardCharsets.UTF_8);
     }
 
-    public static String repackagePatch(String patch, byte[] packages) throws IOException {
+    public static byte[] repackagePatch(byte[] patchBytes, byte[] packages) throws IOException {
         var classPackages = readPackages(packages);
+        var patch = new String(patchBytes, StandardCharsets.UTF_8);
         patch = replaceClasses(patch, classPackages, LEGACY_PATCH_CLASS);
 
         var lines = patch.split("\n", -1);
@@ -61,7 +62,7 @@ public final class LegacyPackageMappings {
 
             lines[i] = line.substring(0, pathStart) + path + line.substring(pathEnd);
         }
-        return String.join("\n", lines);
+        return String.join("\n", lines).getBytes(StandardCharsets.UTF_8);
     }
 
     private static Map<String, String> readPackages(byte[] packages) throws IOException {

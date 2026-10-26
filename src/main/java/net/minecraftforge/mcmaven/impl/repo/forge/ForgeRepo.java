@@ -121,11 +121,10 @@ public final class ForgeRepo extends Repo {
             if (fg == null) {
                 if (isPython(version)) {
                     var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
-                    var sourceZip = this.cache.maven().download(source);
                     var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
                     PythonForgeSource.prepare(
                         new File(this.cache.maven().getFolder(), output.getLocalPath()),
-                        sourceZip
+                        this.cache.maven().download(source)
                     );
                     return processV2(version, mappings, outputJson, FGVersion.v1);
                 }

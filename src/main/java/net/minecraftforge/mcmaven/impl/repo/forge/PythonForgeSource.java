@@ -97,6 +97,34 @@ public final class PythonForgeSource {
         }
     }
 
+    static void generateMappingsZip(File sourceZip, File output) throws IOException {
+        try (var source = new ZipFile(sourceZip)) {
+            var cache = Util.cache(output)
+                    .add("source", sourceZip)
+                    .addKnown("format", FORMAT);
+
+            if (Mavenizer.checkCache(output, cache))
+                return;
+
+            var entries = new LinkedHashMap<String, byte[]>();
+            for (var csv : new String[]{"fields.csv", "methods.csv", "params.csv"})
+                addRequired(source, entries,  csv, FML + "conf/" + csv);
+
+            FileUtils.ensureParent(output);
+            try (var out = new ZipOutputStream(new FileOutputStream(output))) {
+                for (var entry : entries.entrySet()) {
+                    out.putNextEntry(FileUtils.getStableEntry(entry.getKey()));
+                    out.write(entry.getValue());
+                    out.closeEntry();
+                }
+            }
+
+            cache.save();
+        }catch (IOException e) {
+            throw new IllegalStateException("Failed to generate Python-era Forge mappings archive " + output.getAbsolutePath(), e);
+        }
+    }
+
     private static String readMcpVersion(ZipFile source) throws IOException {
         var entry = source.getEntry(FML + "conf/version.cfg");
         if (entry == null)

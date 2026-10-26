@@ -97,7 +97,7 @@ public final class PythonForgeSource {
         }
     }
 
-    static void generateMappingsZip(File sourceZip, File output) throws IOException {
+    static void generateMappingsZip(File sourceZip, File output) {
         try (var source = new ZipFile(sourceZip)) {
             var cache = Util.cache(output)
                     .add("source", sourceZip)

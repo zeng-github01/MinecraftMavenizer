@@ -63,7 +63,9 @@ import java.util.zip.ZipOutputStream;
 // And yes, I DO want this tool to support as far back as possible. But for now, we worry about UserDev3 and up.
 // - Jonathing
 
-/** Represents the Forge repository. */
+/**
+ * Represents the Forge repository.
+ */
 public final class ForgeRepo extends Repo {
     // TODO: [MCMavenizer][FGVersion] Handle this as an edge-case in FGVersion
     private static final ComparableVersion USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851");
@@ -123,9 +125,20 @@ public final class ForgeRepo extends Repo {
                     var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
                     var sourceZip = this.cache.maven().download(source);
                     var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
+                    var mcpSnapshot = Artifact.from(
+                            "de.oceanlabs.mcp",    // Group
+                            "mcp_snapshot",        // Name
+                            PythonForgeSource.getSnapshotVersion(sourceZip),      // Version
+                            null,                  // Classifier (没有 classifier，填 null)
+                            "zip"                  // Extension
+                    );
                     PythonForgeSource.prepare(
-                        new File(this.cache.maven().getFolder(), output.getLocalPath()),
-                        sourceZip
+                            new File(this.cache.maven().getFolder(), output.getLocalPath()),
+                            sourceZip
+                    );
+                    PythonForgeSource.generateMappingsZip(
+                            sourceZip,
+                            new File(cache.maven().getFolder(), mcpSnapshot.getLocalPath())
                     );
                     return processV2(version, mappings, outputJson, FGVersion.v1);
                 }
@@ -136,8 +149,8 @@ public final class ForgeRepo extends Repo {
                 case v1:
                 case v1_1:
                 case v1_2: // V2 can process V1
-                //case v2_0_1: // These use an old decompiler that I haven't patched yet.
-                //case v2_0_2:
+                    //case v2_0_1: // These use an old decompiler that I haven't patched yet.
+                    //case v2_0_2:
                 case v2:
                 case v2_1:
                 case v2_2:
@@ -268,8 +281,8 @@ public final class ForgeRepo extends Repo {
         var srgSources = patcher.get();
 
         var sourcesTask = mappings.channel().equals("srg")
-            ? srgSources
-            : new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
+                ? srgSources
+                : new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
         var recompile = new RecompileTask(build, name, jdks, patcher.getJavaTarget(), patcher::getClasspath, sourcesTask, mappings);
         var classesTask = new InjectTask(build, this.cache, name, patcher, recompile, mappings);
 
@@ -308,21 +321,21 @@ public final class ForgeRepo extends Repo {
     private Map<Artifact, PendingArtifact> getClassifieres(Artifact name, Collection<Artifact> artifacts, Map<Artifact, PendingArtifact> classifiers) {
         for (var artifact : artifacts) {
             if (!name.getGroup().equals(artifact.getGroup())
-             || !name.getName().equals(artifact.getName())
-             || !name.getVersion().equals(artifact.getVersion())
-             || classifiers.containsKey(artifact)
+                    || !name.getName().equals(artifact.getName())
+                    || !name.getVersion().equals(artifact.getVersion())
+                    || classifiers.containsKey(artifact)
             )
                 continue;
             // Classifers can not have variants in gradle, so we just need to download them
             classifiers.put(artifact,
-                pending("Classifier-" + artifact.getClassifier(),
-                    Task.named(
-                        "classifier[" + artifact.getClassifier() + '@' + artifact.getExtension() + ']',
-                        () -> this.cache.maven().download(artifact)
-                    ),
-                    artifact,
-                    false
-                )
+                    pending("Classifier-" + artifact.getClassifier(),
+                            Task.named(
+                                    "classifier[" + artifact.getClassifier() + '@' + artifact.getExtension() + ']',
+                                    () -> this.cache.maven().download(artifact)
+                            ),
+                            artifact,
+                            false
+                    )
             );
         }
         return classifiers;
@@ -362,11 +375,11 @@ public final class ForgeRepo extends Repo {
             var versionJson = forge.getMinecraftTasks().versionJson.execute();
 
             var cache = Util.cache(output)
-                .add("json", versionJson)
-                .add("properties", versionProperties)
-                .add("runs", runsJsonStr)
-                .addKnown("data", forge.getDataHash())
-                .addKnown("version", "1");
+                    .add("json", versionJson)
+                    .add("properties", versionProperties)
+                    .add("runs", runsJsonStr)
+                    .addKnown("data", forge.getDataHash())
+                    .addKnown("version", "1");
 
             if (Mavenizer.checkCache(output, cache))
                 return output;
@@ -384,16 +397,16 @@ public final class ForgeRepo extends Repo {
 
                 // runs.json
                 Files.writeString(
-                    new File(launcherDir, "runs.json").toPath(),
-                    runsJsonStr,
-                    StandardCharsets.UTF_8
+                        new File(launcherDir, "runs.json").toPath(),
+                        runsJsonStr,
+                        StandardCharsets.UTF_8
                 );
 
                 // version.json
                 Files.copy(
-                    versionJson.toPath(),
-                    new File(minecraftDir, "version.json").toPath(),
-                    StandardCopyOption.REPLACE_EXISTING
+                        versionJson.toPath(),
+                        new File(minecraftDir, "version.json").toPath(),
+                        StandardCopyOption.REPLACE_EXISTING
                 );
 
                 // metadata.zip
@@ -412,8 +425,8 @@ public final class ForgeRepo extends Repo {
             var output = new File(build, "forge.pom");
 
             var cache = Util.cache(output)
-                .addKnown("data", forge.getDataHash())
-                .addKnown("code-version", "1");
+                    .addKnown("data", forge.getDataHash())
+                    .addKnown("code-version", "1");
 
             if (clientExtra != null)
                 cache.addKnown("extra", clientExtra.toString());
@@ -491,6 +504,7 @@ public final class ForgeRepo extends Repo {
             }
             return HashFunction.sha1().hash(bos.toByteArray());
         }
+
         private static void zip(ZipFile zip, List<String> entries, String suffix, String version, String hash) {
             Collections.sort(entries);
             var output = new File(version + '-' + suffix + '-' + hash + ".zip");
@@ -533,10 +547,11 @@ public final class ForgeRepo extends Repo {
                 throw new RuntimeException(e);
             }
         }
+
         @SuppressWarnings("unused")
         private static List<PendingArtifact> gatherVariants(MavenCache cache, String version, @Nullable FGVersion fg) {
             var userdev = getUserdev(version);
-            if  (fg == null)
+            if (fg == null)
                 userdev = userdev.withClassifier("src").withExtension("zip");
             var mappingsFiles = new ArrayList<String>();
             var confFiles = new ArrayList<String>();
@@ -549,13 +564,13 @@ public final class ForgeRepo extends Repo {
                     var filename = ename.lastIndexOf('/') == -1 ? ename : ename.substring(ename.lastIndexOf('/') + 1);
 
                     if ("fields.csv".equals(filename)
-                        || "methods.csv".equals(filename)
-                        || "params.csv".equals(filename)
+                            || "methods.csv".equals(filename)
+                            || "params.csv".equals(filename)
                     ) {
                         mappingsFiles.add(ename);
                     } else if (ename.startsWith("conf/")
-                        || ename.startsWith("forge/conf/")
-                        || ename.startsWith("forge/fml/conf/")
+                            || ename.startsWith("forge/conf/")
+                            || ename.startsWith("forge/fml/conf/")
                     ) {
                         confFiles.add(ename);
                     }
@@ -584,6 +599,7 @@ public final class ForgeRepo extends Repo {
             }
             return List.of();
         }
+
         public static void finish() {
             if (!MAPPINGS.isEmpty()) {
                 System.out.println("Mappings: ");

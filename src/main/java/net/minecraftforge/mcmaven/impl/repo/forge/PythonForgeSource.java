@@ -8,19 +8,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
-import net.minecraftforge.mcmaven.impl.mappings.LegacyPackageMappings;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.file.FileUtils;
 
@@ -42,29 +39,7 @@ public final class PythonForgeSource {
                 return;
 
             var entries = new LinkedHashMap<String, byte[]>();
-            if (!addOptional(source, entries, "dev.json", FML + "fml.json")) {
-                entries.put("dev.json", """
-    {
-      "libraries": [
-        { "name": "net.minecraft:launchwrapper:1.5" },
-        { "name": "org.ow2.asm:asm-all:4.1" },
-        { "name": "net.sourceforge.argo:argo:3.2-small" },
-        { "name": "org.bouncycastle:bcprov-jdk15on:148" },
-        { "name": "com.google.guava:guava:14.0-rc3" }
-      ]
-    }
-    """.getBytes(StandardCharsets.UTF_8));
-            }
-            var packages = readRequired(source, FML + "conf/packages.csv");
-
-            var rawffPatch = readRequired(source, FML + "conf/patches/minecraft_ff.patch");
-            entries.put("conf/packaged.patch", LegacyPackageMappings.repackagePatch(rawffPatch, packages));
-
-            var joinedSrg = readRequired(source, FML + "conf/joined.srg");
-            entries.put("conf/packaged.srg", LegacyPackageMappings.repackage(joinedSrg, packages));
-
-            var joinedExc = readRequired(source, FML + "conf/joined.exc");
-            entries.put("conf/packaged.exc", LegacyPackageMappings.repackage(joinedExc, packages));
+            addOptional(source, entries, "dev.json", FML + "fml.json");
 
             for (var csv : new String[]{"fields.csv", "methods.csv", "params.csv"})
                 addRequired(source, entries, "mappings/" + csv, FML + "conf/" + csv);
@@ -73,9 +48,6 @@ public final class PythonForgeSource {
             addRequired(source, entries, "src/main/resources/forge_at.cfg", ROOT + "common/forge_at.cfg");
             addPatchArchive(source, entries, "fmlpatches.zip", FML + "patches/minecraft/");
             addPatchArchive(source, entries, "forgepatches.zip", ROOT + "patches/minecraft/");
-
-            addRequired(source, entries, "conf/astyle.cfg", CONF + "astyle.cfg");
-            addRequired(source,entries,"conf/mcp_merge.cfg", FML + "mcp_merge.cfg");
 
             for (var prefix : new String[]{
                     FML + "client/", FML + "common/", ROOT + "client/", ROOT + "common/"

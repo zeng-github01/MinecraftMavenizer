@@ -152,7 +152,6 @@ public class StupidHacks {
     }
     static {
         // FG 1.x, these were packed in the userdev. Manually uploaded
-        mappings("1.5.2-7.8.1.738","snapshot:20130427-1.5.2");
         mappings("1.6.3-9.11.0.873",         "snapshot:20130918-1.6.3");
         mappings("1.7.2-10.12.0.967",        "snapshot:20131226-1.7.2");
         mappings("1.7.2-10.12.0.1024",       "snapshot:20140205-1.7.2");

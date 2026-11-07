@@ -90,7 +90,7 @@ public final class ForgeRepo extends Repo {
     public static boolean isSupported(String version) {
         var fg = FGVersion.fromForge(version);
         if (fg == null)
-            return isPython(version) && isConvertablePython(version);
+            return isConvertablePython(version);
 
         // Early versions of 1.8.8 use a old '2.0' build with funkey fernflower
         // The mcp artifact was also updated behind the scenes, so it won't apply correctly
@@ -109,7 +109,7 @@ public final class ForgeRepo extends Repo {
 
     private static boolean isConvertablePython(String version) {
         var ver = new ComparableVersion(version);
-        return ver.compareTo(CONVERTABLE_PYTHON_START) >= 0;
+        return ver.compareTo(CONVERTABLE_PYTHON_START) >= 0 && ver.compareTo(PYTHON_END) < 0;
     }
 
     @Override
@@ -135,7 +135,7 @@ public final class ForgeRepo extends Repo {
                         );
                         return processV2(version, mappings, outputJson, FGVersion.v1);
                     }
-                    throw new IllegalArgumentException("Unsupported python version!");
+                    throw new IllegalArgumentException("This python version unsupported!");
                 }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
             }

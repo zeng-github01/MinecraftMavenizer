@@ -87,56 +87,6 @@ public class LegacyUserdev extends FG2Userdev {
     public List<File> getClasspath() {
         var classpath = new ArrayList<>(super.getClasspath());
         classpath.add(this.mciEmbeddedLibsTask.execute());
-
         return classpath;
-    }
-
-    @Override
-    public Task getSources() {
-        var baseSources = super.getSources();
-
-        return Task.named("finalize-legacy-sources",
-                Task.deps(baseSources, this.mciEmbeddedLibsTask),
-                () -> finalizeArtifact(baseSources.execute(), this.mciEmbeddedLibsTask.execute())
-        );
-    }
-
-    private File finalizeArtifact(File baseSourceJar, File mciLibsJar) {
-        var output = new File(this.build, "final-forge-sources.jar");
-        var cache = Util.cache(output)
-                .add("sources", baseSourceJar)
-                .add("mciLibs", mciLibsJar)
-                .addKnown("finalizer", "mci-final-v3");
-
-        if (Mavenizer.checkCache(output, cache))
-            return output;
-
-        FileUtils.ensureParent(output);
-        try (var zout = new ZipOutputStream(new FileOutputStream(output))) {
-            var seen = new HashSet<String>();
-
-            try (var zin = new ZipInputStream(new FileInputStream(baseSourceJar))) {
-                for (ZipEntry entry; (entry = zin.getNextEntry()) != null; ) {
-                    seen.add(entry.getName());
-                    zout.putNextEntry(FileUtils.getStableEntry(entry.getName()));
-                    zin.transferTo(zout);
-                    zout.closeEntry();
-                }
-            }
-
-            try (var zin = new ZipInputStream(new FileInputStream(mciLibsJar))) {
-                for (ZipEntry entry; (entry = zin.getNextEntry()) != null; ) {
-                    if (!seen.add(entry.getName())) continue;
-                    zout.putNextEntry(FileUtils.getStableEntry(entry.getName()));
-                    zin.transferTo(zout);
-                    zout.closeEntry();
-                }
-            }
-
-            cache.save();
-            return output;
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to assemble final legacy artifact", e);
-        }
     }
 }

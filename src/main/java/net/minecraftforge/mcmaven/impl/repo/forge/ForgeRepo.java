@@ -190,8 +190,8 @@ public final class ForgeRepo extends Repo {
 
         var build = new File(this.cache.root(), "forge/" + userdev.getFolder());
         var jdks = this.cache.jdks();
-
-        var dev = new FG2Userdev(build, this, userdev, fgVersion);
+        var isFG2 = new ComparableVersion(Util.forgeToMcVersion(version)).compareTo(ComparableVersion.of("1.6")) > 0;
+        var dev = isFG2 ? new FG2Userdev(build, this, userdev, fgVersion) : new LegacyUserdev(build,this,userdev);
         var mcVersion = Util.forgeToMcVersion(version);
         var srgTask = dev.getMCP().getMappings();
         var srgSources = dev.getSources();

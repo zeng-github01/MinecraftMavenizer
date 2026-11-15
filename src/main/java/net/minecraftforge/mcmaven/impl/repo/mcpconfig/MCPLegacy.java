@@ -727,6 +727,24 @@ public class MCPLegacy {
             if (Mavenizer.checkCache(output, cache))
                 return output;
 
+            File decompileInput = input;
+            if (MCPLegacy.this.mcVersionComp.compareTo(MC_1_6_1) < 0) {
+                var filtered = new File(this.build, "joined-mci-net-only.jar");
+                try (var zin = new ZipInputStream(new FileInputStream(input));
+                     var zout = new ZipOutputStream(new FileOutputStream(filtered))) {
+                    for (ZipEntry entry; (entry = zin.getNextEntry()) != null; ) {
+                        if (entry.getName().startsWith("net/")) {
+                            zout.putNextEntry(FileUtils.getStableEntry(entry.getName()));
+                            zin.transferTo(zout);
+                            zout.closeEntry();
+                        }
+                    }
+                } catch (IOException e) {
+                    return Util.sneak(e);
+                }
+                decompileInput = filtered;
+            }
+
             var jvm = List.of("-Xmx3G"); // This is what FG2.3 has, older versions have 512M, we're on modern machines 3G should be fine
 
             var temp = output;
@@ -736,7 +754,7 @@ public class MCPLegacy {
                 var dir = new File(this.build, "decompile-legacy-temp");
                 if (!dir.exists())
                     dir.mkdir();
-                temp = new File(dir, input.getName());
+                temp = new File(dir, decompileInput.getName());
 
                 run = new ArrayList<String>(decompiler.args.size());
                 if (sorts != null)
@@ -772,7 +790,7 @@ public class MCPLegacy {
                         run.add(arg);
                     }
                 }
-                run.add(input.getAbsolutePath());
+                run.add(decompileInput.getAbsolutePath());
                 run.add(dir.getAbsolutePath());
             } else {
                 run = new ArrayList<String>(decompiler.args);
@@ -814,6 +832,10 @@ public class MCPLegacy {
             return Task.named(prefix + "exceptor",
                 Task.deps(input, config, json), () -> this.exceptor(input.execute(), config.execute(), json)
             );
+        }
+
+        public Task getExceptor() {
+            return this.exceptor();
         }
 
         // We used to use SpecialSource, but im going to try with renamer, it should be fine...
@@ -1214,6 +1236,13 @@ public class MCPLegacy {
             "-asc=1", // ASCII_STRING_CHARACTERS
             "-log=WARN"
         );
+        private static final List<String> DECOMPILER_ARGS_PRE_1_6 = List.of(
+                "-din=0", // DECOMPILE_INNER
+                "-rbr=0", // REMOVE_BRIDGE
+                "-dgs=1", // DECOMPILE_GENERIC_SIGNATURES
+                "-asc=1", // ASCII_STRING_CHARACTERS
+                "-log=WARN"
+        );
         /*
         private static final List<String> DECOMPILER_ARGS_188 = List.of(
             "-din=1", // DECOMPILE_INNER
@@ -1262,7 +1291,8 @@ public class MCPLegacy {
                     );
                     default -> null;
                 };
-                return new Decompiler(Constants.FERNFLOWER_FG_1_0, true, DECOMPILER_ARGS_18, sorts);
+                var args = mc.compareTo(MC_1_6_1) >= 0 ? DECOMPILER_ARGS_18 : DECOMPILER_ARGS_PRE_1_6;
+                return new Decompiler(Constants.FERNFLOWER_FG_1_0, true, args, sorts);
             }
         }
     }

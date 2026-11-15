@@ -58,9 +58,7 @@ public class StupidHacks {
                     List.of(
                             Artifact.from("com.google.guava:guava:14.0-rc3"),
                             Artifact.from("org.bouncycastle:bcprov-jdk15on:1.48"),
-                            Artifact.from("org.ow2.asm:asm-all:4.1"),
-                            Artifact.from("net.sourceforge.argo:argo:3.2"),
-                            Artifact.from("net.minecraftforge:legacyfixer:1.0")
+                            Artifact.from("net.sourceforge.argo:argo:2.25")
                     )
             )
     );
@@ -174,6 +172,7 @@ public class StupidHacks {
     }
     static {
         // FG 1.x, these were packed in the userdev. Manually uploaded
+        mappings("1.4.7-6.6.2.534","snapshot:20130224-1.4.7");
         mappings("1.5.2-7.8.0.684",          "snapshot:20130617-1.5.2");
         mappings("1.6.2-9.10.0.776",         "snapshot:20130915-1.6.2");
         mappings("1.6.3-9.11.0.873",         "snapshot:20130918-1.6.3");

@@ -128,14 +128,16 @@ public final class ForgeRepo extends Repo {
             // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             if (fg == null) {
                 if (isPython(version)) {
-                    var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
-                    var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
-                    PythonForgeSource.prepare(
-                            new File(this.cache.maven().getFolder(), output.getLocalPath()),
-                            this.cache.maven().download(source)
-                    );
+                   if (isConvertablePython(version)) {
+                       var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
+                       var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
+                       PythonForgeSource.prepare(
+                               new File(this.cache.maven().getFolder(), output.getLocalPath()),
+                               this.cache.maven().download(source)
+                       );
 
-                    return processV2(version, mappings, outputJson, FGVersion.v1);
+                       return processV2(version, mappings, outputJson, FGVersion.v1);
+                   }
                 }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
             }
@@ -190,8 +192,7 @@ public final class ForgeRepo extends Repo {
 
         var build = new File(this.cache.root(), "forge/" + userdev.getFolder());
         var jdks = this.cache.jdks();
-        var isFG2 = new ComparableVersion(Util.forgeToMcVersion(version)).compareTo(ComparableVersion.of("1.6")) > 0;
-        var dev = isFG2 ? new FG2Userdev(build, this, userdev, fgVersion) : new LegacyUserdev(build,this,userdev);
+        var dev = new FG2Userdev(build, this, userdev, fgVersion);
         var mcVersion = Util.forgeToMcVersion(version);
         var srgTask = dev.getMCP().getMappings();
         var srgSources = dev.getSources();

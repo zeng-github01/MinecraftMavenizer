@@ -54,7 +54,9 @@ public class StupidHacks {
         // They renamed the artifact
         //"tv.twitch:twitch-external-platform:4.5", "tv.twitch:twitch-platform:4.5",
         // Bumped transitivly somewhere in 1.7.10-pre4, and relied on the bumped version
-        "com.google.guava:guava:15.0", "com.google.guava:guava:16.0"
+        "com.google.guava:guava:15.0", "com.google.guava:guava:16.0",
+        // The official artifact includes the sources in the official artifact, so Mojang uploaded a 'fixed' version on their repo
+        "net.sourceforge.argo:argo:2.25", "argo:argo:2.25_fixed"
     );
     // these are artifacts that Mojang referenced in the past, but now are deleted.
     //private static Set<String> DELETED_ARTIFACTS = Set.of(
